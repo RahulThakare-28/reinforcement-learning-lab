@@ -1,0 +1,6 @@
+Python==3.11.9
+Gymnasium==1.3.0
+Stable-Baselines3==2.9.0
+NumPy==2.4.6
+pyautogui==0.9.54
+opencv-python==5.0.0.93
