@@ -2,4 +2,5 @@
 dino_rl.ipynb
 notebooks/
 dino_dqn_v1.zip
-src/__pycache__/*
+__pycache__/
+  
