@@ -1,6 +1,6 @@
 .venv/
 dino_rl.ipynb
 notebooks/
-dino_dqn_v1.zip
+models/
 __pycache__/
   
