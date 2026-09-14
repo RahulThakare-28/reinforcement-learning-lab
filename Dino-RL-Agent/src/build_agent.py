@@ -20,7 +20,7 @@ model = DQN(
 if __name__ == "__main__":
 
     # train the model
-    model.learn(total_timesteps=100_000)
+    model.learn(total_timesteps=100_0000)
 
     # save the model
-    model.save("../models/dino_dqn_v1")
+    model.save("../models/dino_dqn_v2")
