@@ -109,9 +109,15 @@ class ScreenCapture:
     - Video recording and snapshot export utilities
     """
 
-    def __init__(self, default_geometry: str = "800x350+300+200", window_alpha: float = 0.3):
+    def __init__(
+        self,
+        default_geometry: str = "800x350+300+200",
+        window_alpha: float = 1.0,
+        transparent_color: str = "#000001"
+    ):
         self.default_geometry = default_geometry
         self.window_alpha = window_alpha
+        self.transparent_color = transparent_color
 
         self.root: Optional[tk.Tk] = None
         self.canvas: Optional[tk.Canvas] = None
@@ -142,11 +148,18 @@ class ScreenCapture:
             self.root.geometry(self.default_geometry)
             self.root.attributes("-topmost", True)
 
-            # Transparency to see game beneath the window
+            # Make the canvas area inside the red border 100% transparent on Windows
+            # View ground is crystal clear while toolbar, buttons, and red border remain solid
+            canvas_bg = self.transparent_color
             try:
-                self.root.attributes("-alpha", self.window_alpha)
+                self.root.attributes("-transparentcolor", self.transparent_color)
             except tk.TclError:
-                logger.warning("Alpha transparency not supported on this display.")
+                # Fallback for systems that only support alpha transparency
+                try:
+                    self.root.attributes("-alpha", self.window_alpha if self.window_alpha < 1.0 else 0.3)
+                except tk.TclError:
+                    pass
+                canvas_bg = "white"
 
             # Top control toolbar (Play, Pause, Cancel, Region indicator)
             toolbar = tk.Frame(self.root, bg="#1e1e24", height=38)
@@ -225,13 +238,30 @@ class ScreenCapture:
             self.region_label.pack(side="right", padx=10, pady=4)
 
             # Canvas viewport representing the capture area
+            # The canvas area inside the red border is 100% transparent to clearly view ground
             self.canvas = tk.Canvas(
                 self.root,
                 highlightthickness=3,
                 highlightbackground="#e74c3c",
-                bg="white"
+                bg=canvas_bg
             )
             self.canvas.pack(fill="both", expand=True)
+
+            # Allow dragging the window by clicking and dragging anywhere on the toolbar
+            def start_move(event):
+                self._drag_x = event.x
+                self._drag_y = event.y
+
+            def on_move(event):
+                if hasattr(self, "_drag_x") and hasattr(self, "_drag_y"):
+                    deltax = event.x - self._drag_x
+                    deltay = event.y - self._drag_y
+                    x = self.root.winfo_x() + deltax
+                    y = self.root.winfo_y() + deltay
+                    self.root.geometry(f"+{x}+{y}")
+
+            toolbar.bind("<ButtonPress-1>", start_move)
+            toolbar.bind("<B1-Motion>", on_move)
 
             # Intercept window close protocols cleanly:
             # Clicking [X] button or pressing Escape triggers self.close() safely
@@ -555,3 +585,4 @@ class ScreenCapture:
             return False
 
 
+  
