@@ -70,23 +70,25 @@ class Preprocessor:
         is_night_mode = mean_intensity < self.threshold_value
 
         # 3. Binary 1-channel thresholding
-        # Goal: Foreground objects must ALWAYS be WHITE (255), background BLACK (0) for detector contours
+        # Goal: Background must ALWAYS be WHITE (255), and Objects/Elements must be BLACK (0)
         if self.auto_invert:
             if is_night_mode:
-                # Dark background -> Foreground objects are lighter than background
-                _, binary = cv2.threshold(
-                    gray,
-                    self.threshold_value,
-                    255,
-                    cv2.THRESH_BINARY
-                )
-            else:
-                # Light background -> Invert so dark foreground objects become white (255)
+                # Night mode: Dark background, light objects
+                # Invert so dark background becomes WHITE (255) and light objects become BLACK (0)
                 _, binary = cv2.threshold(
                     gray,
                     self.threshold_value,
                     255,
                     cv2.THRESH_BINARY_INV
+                )
+            else:
+                # Day mode: Light background, dark objects
+                # Direct threshold: light background stays WHITE (255), dark objects stay BLACK (0)
+                _, binary = cv2.threshold(
+                    gray,
+                    self.threshold_value,
+                    255,
+                    cv2.THRESH_BINARY
                 )
         else:
             _, binary = cv2.threshold(
@@ -102,6 +104,13 @@ class Preprocessor:
             "binary": binary,
             "is_night_mode": is_night_mode,
         }
+
+    def __call__(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Direct shortcut returning the 1-channel binary frame
+        (Background = 255 WHITE, Objects/Elements = 0 BLACK).
+        """
+        return self.process(frame)["binary"]
 
 
 # =====================================================================
@@ -180,7 +189,7 @@ if __name__ == "__main__":
             # Overlay labels
             mode_text = "Night Mode" if is_night else "Day Mode"
             cv2.putText(color_vis, f"Raw Screen ({mode_text})", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            cv2.putText(binary_vis, "1-Channel Binary (Foreground=White)", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            cv2.putText(binary_vis, "1-Ch Binary (Bg=White, Elements=Black)", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
             combined_preview = np.hstack([color_vis, binary_vis])
             cv2.imshow(window_name, combined_preview)
