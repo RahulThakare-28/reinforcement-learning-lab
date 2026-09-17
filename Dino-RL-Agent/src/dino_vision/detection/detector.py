@@ -121,8 +121,8 @@ class Detector:
                 x += 10
                 y += 40
 
-                # Filter out ground fragments or tiny noise
-                if area < self.min_area or w < 10 or h < 15:
+                # Filter out tiny noise and ground fragments
+                if area < self.min_area or w < 15 or h < 20:
                     continue
 
                 # Filter out extremely wide ground lines
@@ -134,17 +134,44 @@ class Detector:
             if not candidates:
                 return self.last_dino
 
+            # Merge vertically adjacent/overlapping Dino fragments (e.g. legs + body)
+            if len(candidates) > 1:
+                # Group candidates that are horizontally aligned (within 20px)
+                aligned = [c for c in candidates if abs(c["x"] - candidates[0]["x"]) < 25]
+                if len(aligned) > 1:
+                    min_x = min(c["x"] for c in aligned)
+                    max_x = max(c["x"] + c["width"] for c in aligned)
+                    min_y = min(c["y"] for c in aligned)
+                    max_y = max(c["y"] + c["height"] for c in aligned)
+                    merged_w = max_x - min_x
+                    merged_h = max_y - min_y
+                    if 35 <= merged_w <= 85 and 30 <= merged_h <= 65:
+                        candidates.append({
+                            "x": min_x,
+                            "y": min_y,
+                            "width": merged_w,
+                            "height": merged_h,
+                            "area": sum(c["area"] for c in aligned),
+                        })
+
             # Dino is typically around x ≈ 40-90. Select candidate closest to standard Dino position
             best_dino = min(
                 candidates,
                 key=lambda c: abs((c["x"] + c["width"] / 2) - 75) + abs((c["y"] + c["height"]) - ground_y) * 0.4
             )
 
+            # Anatomical sanity check: Dino width is [35..75], height is [30..65]
+            cand_w = int(best_dino["width"])
+            cand_h = int(best_dino["height"])
+            if cand_w < 30 or cand_h < 25:
+                if self.last_dino is not None:
+                    return self.last_dino
+
             dino_result = {
                 "x": int(best_dino["x"]),
                 "y": int(best_dino["y"]),
-                "width": int(best_dino["width"]),
-                "height": int(best_dino["height"]),
+                "width": int(np.clip(cand_w, 35, 75)),
+                "height": int(np.clip(cand_h, 30, 65)),
             }
             self.last_dino = dino_result
             return dino_result
@@ -158,24 +185,31 @@ class Detector:
     ) -> Optional[Dict[str, Any]]:
         """
         Detect the nearest upcoming obstacle (cactus or bird) ahead of the Dino.
+        Strictly excludes ground line to prevent ground-obstacle merging.
         """
         try:
             height, width = mask.shape
             search_start_x = max(dino_x_end + 5, self.min_obstacle_x)
             search_end_x = width - 5
 
-            # Restrict search area to active track zone (exclude top score numbers)
+            # Restrict search area to active track zone above ground line
             top_y = max(40, ground_y - 130)
-            bottom_y = min(height, ground_y + 10)
+            # FIX 1: Cut off strictly ABOVE ground line (ground_y - 2) so ground texture is never included
+            bottom_y = min(height, ground_y - 2)
 
             if search_start_x >= search_end_x or top_y >= bottom_y:
                 return None
 
-            roi = mask[top_y:bottom_y, search_start_x:search_end_x]
+            roi = mask[top_y:bottom_y, search_start_x:search_end_x].copy()
             if roi.size == 0:
                 return None
 
-            # Morphological close to merge multi-branch cacti segments
+            # Blank out any residual ground pixels near the bottom edge
+            ground_cutoff = max(0, (ground_y - 2) - top_y)
+            if ground_cutoff < roi.shape[0]:
+                roi[ground_cutoff:, :] = 0
+
+            # Morphological close to merge multi-branch cacti segments cleanly without ground bridging
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
             closed_roi = cv2.morphologyEx(roi, cv2.MORPH_CLOSE, kernel)
 
@@ -192,33 +226,46 @@ class Detector:
                 x += search_start_x
                 y += top_y
 
-                # Noise & size filtering
-                if area < self.min_area or w < 6 or h < 8:
+                # Noise & size filtering (minimum dimensions)
+                if area < self.min_area or w < 8 or h < 10:
                     continue
 
-                # Filter out ground line
-                if w > h * 4.5 and h < 12:
+                # FIX 1 & 2: Filter out ground line fragments and abnormally wide contours
+                # Single/triple cactus clusters in Chrome Dino are at most ~85-110px wide.
+                # A contour with w > 130px is an artifact or merged ground line!
+                if w > 130:
+                    continue
+
+                # Filter out flat horizontal lines (ground bumps/debris)
+                if w > h * 3.2 and h < 20:
                     continue
 
                 # Filter out restart button or game over text (usually centered high)
-                if abs(x - width / 2) < 40 and y < ground_y - 70 and w > 35:
+                if abs(x - width / 2) < 45 and y < ground_y - 70 and w > 35:
                     continue
 
                 # Classify obstacle type: Cactus vs Bird
-                # Cactus touches the ground: bottom (y + h) >= ground_y - 15
-                # Bird is airborne: bottom (y + h) < ground_y - 15
+                # Since ROI is cut at ground_y - 2, a cactus resting on ground will have
+                # its bottom edge within 10px of ground_y. Airborne birds fly higher.
                 obstacle_bottom = y + h
-                if obstacle_bottom >= (ground_y - 15):
+                if obstacle_bottom >= (ground_y - 12):
                     obstacle_type = "cactus"
+                    # Restore true ground-anchored height since bottom 2px were cropped
+                    h_adjusted = min(75, h + 2)
                 else:
                     obstacle_type = "bird"
+                    h_adjusted = h
+
+                # Clamp dimensions to realistic physical limits
+                clamped_w = int(np.clip(w, 15, 100))
+                clamped_h = int(np.clip(h_adjusted, 12, 75))
 
                 candidates.append({
                     "type": obstacle_type,
                     "x": int(x),
                     "y": int(y),
-                    "width": int(w),
-                    "height": int(h),
+                    "width": clamped_w,
+                    "height": clamped_h,
                     "area": float(area),
                 })
 
