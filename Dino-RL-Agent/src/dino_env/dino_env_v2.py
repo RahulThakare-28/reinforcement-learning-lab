@@ -41,7 +41,7 @@ class DinoEnvV2(gym.Env):
     DINO_DUCK_WIDTH = 70.0
 
     MAX_GROUND_RANGE = 600.0
-    JUMP_DANGER_ZONE = 180.0  # Threshold within which a jump is considered timely for incoming cactus
+    JUMP_DANGER_ZONE = 135.0  # Calibrated: jump window at 18 px/frame base speed
 
     def __init__(self):
         super().__init__()
@@ -75,7 +75,7 @@ class DinoEnvV2(gym.Env):
                 100.0,  # dino_height
                 120.0,  # dino_width
                 150.0,  # obstacle_height
-                850.0,  # obstacle_width
+                100.0,  # obstacle_width: clamped max is 100 px (Fix 2)
                 1.0     # obstacle_type
             ], dtype=np.float32),
             dtype=np.float32
@@ -107,7 +107,7 @@ class DinoEnvV2(gym.Env):
         # ====================================================
         # GAME & SPEED STATE
         # ====================================================
-        self.base_speed = 35.0         # Calibrated from Obs median approaching speed
+        self.base_speed = 18.0         # Calibrated from Obs median 16-22 px/frame (was 35.0)
         self.current_speed = self.base_speed
         self.obstacles_survived = 0
         self.steps = 0
@@ -151,8 +151,8 @@ class DinoEnvV2(gym.Env):
             self.obstacle_type = 1.0
             # Height in [35.0, 65.0], modal ~55-59 from Obs data
             self.obstacle_height = float(self.np_random.uniform(35.0, 65.0))
-            # Width in [25.0, 75.0] (small single or multi-cactus cluster)
-            self.obstacle_width = float(self.np_random.choice([28.0, 45.0, 68.0]))
+            # Width: [25.0, 48.0, 72.0] px — small single / double / triple cactus clusters
+            self.obstacle_width = float(self.np_random.choice([25.0, 48.0, 72.0]))
             self.bird_altitude = 0.0
         else:
             # Bird (Air obstacle)
@@ -165,7 +165,8 @@ class DinoEnvV2(gym.Env):
             self.bird_altitude = 40.0
 
         # Slight game speed acceleration over time
-        speed_boost = min(35.0, self.obstacles_survived * 0.8)
+        # Cap at +15 px/frame over 37 obstacles; rate 0.4 px per obstacle (was 0.8, cap 35)
+        speed_boost = min(15.0, self.obstacles_survived * 0.4)
         self.current_speed = self.base_speed + speed_boost
 
     # ========================================================

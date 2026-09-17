@@ -237,7 +237,9 @@ def run_dinoV1(
                 continue
 
             # ── 5. Action Execution via EnvV2Controller ────────────────────────
-            controller.execute_action(action)
+            # Pass is_jumping so Fix 3 cooldown can suppress repeated JUMP presses
+            is_jumping = bool(obs_dict.get("dino", {}).get("is_jumping", False))
+            controller.execute_action(action, is_jumping=is_jumping)
 
             # ── Terminal telemetry ────────────────────────────────────────────
             if frame_count % 15 == 0 or action != 2:

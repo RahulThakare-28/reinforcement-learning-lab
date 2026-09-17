@@ -303,6 +303,12 @@ class ObservationManager:
                     (1.0 - self.ema_alpha) * self.smoothed_velocity
                 )
 
+            # FIX 2 (Anomaly D): Safeguard velocity within realistic bounds when
+            # obstacle is actively tracked. Prevents stagnant velocity (v=11.1)
+            # and caps runaway estimates.
+            if self.smoothed_velocity > 0.0:
+                self.smoothed_velocity = float(np.clip(self.smoothed_velocity, 10.0, 45.0))
+
             self.relative_velocity = float(self.smoothed_velocity)
 
             # Update history
@@ -398,6 +404,11 @@ class ObservationManager:
                     "is_jumping": bool(is_jumping),
                 }
 
+            # FIX 2 (Anomaly C): Clamp Dino dimensions to anatomically valid range.
+            # Prevents out-of-distribution vectors from contour fragmentation.
+            dino_width = float(np.clip(dino_width, 40.0, 75.0))
+            dino_height = float(np.clip(dino_height, 30.0, 65.0))
+
             # 4. Obstacle Geometry & Type Code
             # Required by specification:
             # 0 for bird
@@ -411,9 +422,15 @@ class ObservationManager:
                 if "bird" in obs_type:
                     type_code = 0.0
                     obs_type = "bird"
+                    # FIX 2: Clamp bird dimensions
+                    obs_width = float(np.clip(obs_width, 15.0, 100.0))
+                    obs_height = float(np.clip(obs_height, 12.0, 40.0))
                 else:
                     type_code = 1.0
                     obs_type = "cactus"
+                    # FIX 2: Clamp cactus dimensions (Anomaly A fix at observation layer)
+                    obs_width = float(np.clip(obs_width, 15.0, 100.0))
+                    obs_height = float(np.clip(obs_height, 12.0, 75.0))
 
                 enriched_obstacle = {
                     "type": obs_type,
