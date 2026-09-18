@@ -21,8 +21,10 @@
 import pyautogui
 from pynput import keyboard
 
-
-# Agent starts in paused state
+# class Controller:
+#     # Agent starts in paused state
+#     def __init__(self) : 
+#         pass
 paused = True
 quit_game = False
 
@@ -64,8 +66,8 @@ def on_key_press(key):
 
     except AttributeError:
         pass
-
-
+    
+    
 def start_controller():
 
     listener = keyboard.Listener(
@@ -82,10 +84,14 @@ def execute_action(action):
 
     action = int(action)
 
-    # DQN action 1 = UP
+    # DQN action 1 = UP / JUMP
     if action == 1:
         pyautogui.press("up")
 
     # DQN action 0 = DOWN / DUCK
     elif action == 0:
         pyautogui.press("down")
+
+    # DQN action 2 = DO NOTHING
+    elif action == 2:
+        pass

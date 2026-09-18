@@ -27,9 +27,14 @@ class DinoEnvV2(gym.Env):
 
     Reward System:
         - Collision: -100.0 (episode terminates)
-        - Survived obstacle (passed without collision): +1.0
-        - Do nothing (action 2): +0.50
-        - Unnecessary jump: -0.30
+        - Per-step survival bonus: +0.01
+        - Do nothing (action 2): +0.05 (intentionally small to prevent DO_NOTHING local optimum)
+        - Unnecessary jump: -0.40
+        - Well-timed JUMP over cactus: +1.5 + obstacle bonus
+        - Well-timed DUCK under bird: +1.0 + obstacle bonus
+        - Unjustified DUCK: -0.15 (penalise DUCK spamming)
+        - Obstacle survived (cactus jumped): +2.0 bonus
+        - Obstacle survived (bird ducked): +1.5 bonus
     """
 
     metadata = {"render_modes": ["human"]}
@@ -41,7 +46,7 @@ class DinoEnvV2(gym.Env):
     DINO_DUCK_WIDTH = 70.0
 
     MAX_GROUND_RANGE = 600.0
-    JUMP_DANGER_ZONE = 135.0  # Calibrated: jump window at 18 px/frame base speed
+    JUMP_DANGER_ZONE = 160.0  # px — gives ~9 frame reaction window at 18 px/frame base speed
 
     def __init__(self):
         super().__init__()
@@ -294,27 +299,37 @@ class DinoEnvV2(gym.Env):
         else:
             terminated = False
 
-            # Reward components according to user specifications:
+            # ── Per-step survival bonus: reward living longer ──
+            reward = 0.01
+
             if action == 2:
-                # Do nothing: +0.50 points
-                reward = 0.50
+                # DO NOTHING: tiny reward — should NOT be the easy safe default.
+                # Reduced from +0.50 to +0.05 to break DO_NOTHING local optimum.
+                reward += 0.05
+
             elif action == 1:
                 if unnecessary_jump:
-                    # Unnecessary jump: -0.30 points
-                    reward = -0.30
+                    # Unnecessary jump (far obstacle, or airborne re-press): penalty
+                    reward += -0.40
                 else:
-                    # Well-timed jump over cactus
-                    reward = 0.75
+                    # Well-timed jump over cactus: significantly rewarded
+                    reward += 1.5
+
             elif action == 0:
                 # Duck
                 if timely_duck:
-                    reward = 0.75
+                    # Timely duck to dodge bird: well rewarded
+                    reward += 1.0
                 else:
-                    reward = 0.20
+                    # Ducking with no reason / against a cactus: penalise
+                    reward += -0.15
 
-            # Obstacle successfully survived: +1.0 point
+            # Obstacle successfully survived: bigger reward to dominate DO_NOTHING
             if self.distance_to_obstacle == 0.0 and not collision:
-                reward += 1.0
+                if self.obstacle_type == 1.0:
+                    reward += 2.0   # Cactus cleared by jump
+                else:
+                    reward += 1.5   # Bird cleared by duck
                 self.obstacles_survived += 1
                 self._spawn_obstacle()
 

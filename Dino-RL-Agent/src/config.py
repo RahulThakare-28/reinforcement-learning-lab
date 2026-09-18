@@ -7,9 +7,9 @@ GAME_REGION = {
     "width": 950,
     "height": 300
 }
-
+ 
 DINO_ROI_WIDTH = 180
 
 
-MODEL_PATH = "../models/dino_dqn_v1.zip"
+MODEL_PATH  = "../models/dino_dqn_v1.zip"
 

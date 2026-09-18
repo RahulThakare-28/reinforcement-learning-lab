@@ -1,48 +1,109 @@
-
-from config import MODEL_PATH
-from screen import capture_game
-from observation import get_observation
-from controller import execute_action
-
+#Dino-RL-Agent/src/agent2.py
+# -- verion 2 ---
 import time
+import numpy as np
+
 from stable_baselines3 import DQN
 
-# Load Your Trained Model
-model = DQN.load(MODEL_PATH)
+from screen import capture_game
+from observation import get_observation
+from config import MODEL_PATH
 
-frame = capture_game()
+import controller
 
-observation = get_observation(frame)
 
-action, _ = model.predict(
-    observation,
-    deterministic=True
+
+
+
+# ============================================================
+# Load trained model
+# ============================================================
+
+model = DQN.load(
+    MODEL_PATH
 )
 
 
-# agent 
+# ============================================================
+# Agent
+# ============================================================
+
 def run_agent():
 
-    global previous_dino_y
+    # Start keyboard controller
+    controller.start_controller()
 
-    previous_dino_y = None
+    print("\n================================")
+    print("       DINO RL AGENT")
+    print("================================")
+    print("S = Start")
+    print("P = Pause")
+    print("R = Resume")
+    print("Q = Quit")
+    print("================================\n")
 
-    while True:
+    while not controller.quit_game:
+
+        # ----------------------------------------
+        # PAUSED
+        #
+        # Agent stays alive in background.
+        # It does NOT terminate.
+        # ----------------------------------------
+
+        if controller.paused:
+
+            time.sleep(0.05)
+
+            continue
+
+
+        # ----------------------------------------
+        # PLAYING
+        # ----------------------------------------
 
         frame = capture_game()
 
-        observation = get_observation(frame)
+        observation = get_observation(
+            frame
+        )
+
+
+        # ----------------------------------------
+        # DQN prediction
+        # ----------------------------------------
 
         action, _ = model.predict(
             observation,
             deterministic=True
         )
 
-        execute_action(action)
+
+        # ----------------------------------------
+        # Execute DQN action
+        #
+        # 1 = UP
+        # 0 = DOWN / DUCK
+        # ----------------------------------------
+
+        controller.execute_action(
+            action
+        )
+
 
         print(
-            f"Obs={observation} | "
+            f"Obs={np.round(observation, 2)} | "
             f"Action={int(action)}"
         )
 
+
         time.sleep(0.03)
+
+
+    # ----------------------------------------
+    # Q pressed
+    # ----------------------------------------
+
+    print("\nAgent terminated.")
+
+

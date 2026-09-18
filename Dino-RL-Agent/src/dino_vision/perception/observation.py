@@ -260,10 +260,13 @@ class ObservationManager:
 
             # If no obstacle is present on screen
             if not obstacle or obstacle.get("type", "none") == "none" or current_distance >= self.max_distance:
-                # Retain previous smoothed speed or gently decay if stationary for a while
+                # FIX A: Return 0.0 when no obstacle instead of retaining last tracked velocity.
+                # Retained velocity (up to 45.0) caused OOD inputs → model defaults to DUCK.
+                # Training env velocity (current_speed 18-33) is NOT retained between obstacles,
+                # so 0.0 is much closer to what the model saw during training.
                 self.previous_distance = None
                 self.previous_obstacle_x = None
-                return float(self.smoothed_velocity)
+                return 0.0
 
             obs_x = float(obstacle.get("x", 0))
             dino_front_x = float(dino.get("x", 0) + dino.get("width", 0)) if dino else 0.0

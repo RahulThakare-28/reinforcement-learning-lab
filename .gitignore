@@ -3,4 +3,5 @@ dino_rl.ipynb
 notebooks/
 models/
 __pycache__/
-  
+logs/
+Dino-RL-Agent/Obs/
